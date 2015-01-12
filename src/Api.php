@@ -1,9 +1,14 @@
 <?php
-
 namespace yiidreateam\smsru;
 
 use GuzzleHttp\Client;
 
+/**
+ * Class Api
+ *
+ * @package yiidreateam\smsru
+ * @author Alexey Samoylov <alexey.samoylov@gmail.com>
+ */
 class Api
 {
     protected $apiId;
