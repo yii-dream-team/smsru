@@ -72,7 +72,7 @@ PHP-класс для работы с api сервиса [sms.ru](http://yiidrea
 
 ## Ссылки
 
-* [Сервис sms.ru](http://http://yiidreamteam.sms.ru)
+* [Сервис sms.ru](http://yiidreamteam.sms.ru)
 * [Официальный сайт](http://yiidreamteam.com/php/smsru)
 * [Исходный код на GitHub](https://github.com/yii-dream-team/smsru)
 * [Composer пакет на Packagist](https://packagist.org/packages/yii-dream-team/smsru)

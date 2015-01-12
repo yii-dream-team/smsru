@@ -1,7 +1,7 @@
 {
   "name": "yii-dream-team/smsru",
   "description": "sms.ru api client",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "type": "library",
   "keywords": [
     "sms",

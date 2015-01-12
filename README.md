@@ -72,7 +72,7 @@ Obtaining the stop list:
 
 ## Links
 
-* [sms.ru service](http://http://yiidreamteam.sms.ru)
+* [sms.ru service](http://yiidreamteam.sms.ru)
 * [Official site](http://yiidreamteam.com/php/smsru)
 * [Source code on GitHub](https://github.com/yii-dream-team/smsru)
 * [Composer package on Packagist](https://packagist.org/packages/yii-dream-team/smsru)
