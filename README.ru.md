@@ -1,9 +1,11 @@
-# yiidreamteam\smsru\Api
+# yiidreamteam\smsru\Api #
 
 PHP-класс для работы с api сервиса [sms.ru](http://yiidreamteam.sms.ru).
 Улучшенная и переработанная версия класса [sms_ru](https://github.com/zelenin/sms_ru) Александра Зеленина.
 
-### Установка через Composer
+## Установка ##
+
+Предпочтительным способом установки является установка через [composer](http://getcomposer.org/download/).
 
 Запустите
 
@@ -15,7 +17,7 @@ PHP-класс для работы с api сервиса [sms.ru](http://yiidrea
 
 в секцию `require` вашего composer.json
 
-## Использование
+## Использование ##
 
 Авторизация:
 
