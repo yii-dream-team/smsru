@@ -1,5 +1,5 @@
 <?php
-namespace yiidreateam\smsru;
+namespace yiidreamteam\smsru;
 
 use GuzzleHttp\Client;
 
