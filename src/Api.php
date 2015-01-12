@@ -1,22 +1,19 @@
 <?php
 
-namespace Zelenin;
+namespace yiidreateam\smsru;
 
-use Exception;
 use GuzzleHttp\Client;
-use GuzzleHttp\Message\Response;
 
-class Smsru
+class Api
 {
-    /** @var Client */
-    private $client = null;
-    private $apiId = null;
-    private $login = null;
-    private $password = null;
-    private $token;
-    private $sha512;
+    protected $apiId;
 
-    const API_HOST = 'sms.ru';
+    /** @var Client */
+    protected $client = null;
+    protected $authParams = [];
+
+    const API_URL = 'http://sms.ru/';
+
     const METHOD_SMS_SEND = 'sms/send';
     const METHOD_SMS_STATUS = 'sms/status';
     const METHOD_SMS_COST = 'sms/cost';
@@ -24,258 +21,281 @@ class Smsru
     const METHOD_MY_LIMIT = 'my/limit';
     const METHOD_MY_SENDERS = 'my/senders';
     const METHOD_AUTH_GET_TOKEN = 'auth/get_token';
-    const METHOD_AUTH_CHECK = 'auth/check';
-    const METHOD_STOPLIST_ADD = 'stoplist/add';
-    const METHOD_STOPLIST_DEL = 'stoplist/del';
-    const METHOD_STOPLIST_GET = 'stoplist/get';
+    const METHOD_STOP_LIST_ADD = 'stoplist/add';
+    const METHOD_STOP_LIST_DEL = 'stoplist/del';
+    const METHOD_STOP_LIST_GET = 'stoplist/get';
 
-    const MAX_TIME = 604800;
-
-    public function  __construct()
-    {
-    }
-
-    public function setApiId($apiId)
+    public function __construct($apiId)
     {
         $this->apiId = $apiId;
-        return $this;
     }
 
-    public function setLogin($login)
+    /**
+     * Makes api call
+     *
+     * @param $method
+     * @param array $params
+     * @return string
+     * @throws \Exception
+     */
+    public function call($method, $params = [])
     {
-        $this->login = $login;
-        return $this;
+        if (empty($this->client))
+            $this->client = new Client([
+                'base_url' => static::API_URL,
+            ]);
+
+        if (empty($this->authParams))
+            $this->authParams = [
+                'api_id' => $this->apiId
+            ];
+
+        $params = array_merge($params, $this->authParams);
+
+        try {
+            $response = $this->client->post($method, ['body' => $params]);
+            if ($response->getStatusCode() != 200)
+                throw new \Exception('Api http error: ' . $response->getStatusCode(), $response->getStatusCode());
+            return (string)$response->getBody();
+        } catch (\Exception $e) {
+            throw $e;
+        }
     }
 
-    public function setPassword($password)
+    /**
+     * Makes api call and returns call result as array
+     *
+     * @param string $method
+     * @param array $params
+     * @return array
+     * @throws \Exception
+     */
+    protected function callInternal($method, $params = [])
     {
-        $this->password = $password;
-        return $this;
+        $response = $this->call($method, $params);
+        $response = explode("\n", rtrim($response));
+        $code = array_shift($response);
+        return [
+            'code' => $code,
+            'description' => $this->getResponseText(static::METHOD_SMS_SEND, $code),
+            'data' => $response,
+        ];
     }
 
-    public function smsSend(
+    /**
+     * Sends message
+     *
+     * @param string $to
+     * @param string $text
+     * @param string|null $from
+     * @param integer|null $time
+     * @param bool $transliteration
+     * @param bool $test
+     * @param string|null $partnerId
+     * @return array
+     *
+     * @link http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=sms/send
+     */
+    public function send(
         $to,
         $text,
         $from = null,
         $time = null,
-        $translit = false,
+        $transliteration = false,
         $test = false,
-        $partner_id = null
-    ) {
+        $partnerId = null
+    )
+    {
         $messages = [[$to, $text]];
-        return $this->multiSmsSend($messages, $from, $time, $translit, $test, $partner_id);
+        return $this->sendMultiple($messages, $from, $time, $transliteration, $test, $partnerId);
     }
 
-    public function multiSmsSend(
+    /**
+     * Sends multiple messages
+     *
+     * @param array $messages
+     * @param string|null $from
+     * @param integer|null $time
+     * @param bool $transliteration
+     * @param bool $test
+     * @param string|null $partnerId
+     * @return array
+     * @throws \Exception
+     *
+     * @link http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=sms/send
+     */
+    public function sendMultiple(
         $messages,
         $from = null,
         $time = null,
-        $translit = false,
+        $transliteration = false,
         $test = false,
-        $partner_id = null
-    ) {
-        foreach ($messages as $message) {
+        $partnerId = null
+    )
+    {
+        $params = [
+            'from' => $from,
+            'time' => $time,
+            'translit' => $transliteration,
+            'test' => $test,
+            'partner_id' => $partnerId,
+        ];
+        array_filter($params);
+
+        foreach ($messages as $message)
             $params['multi'][$message[0]] = $message[1];
-        }
 
-        if ($from) {
-            $params['from'] = $from;
-        }
+        $result = $this->callInternal(static::METHOD_SMS_SEND, $params);
 
-        if ($time && $time < (time() + static::MAX_TIME)) {
-            $params['time'] = $time;
-        }
-
-        if ($translit) {
-            $params['translit'] = 1;
-        }
-
-        if ($test) {
-            $params['test'] = 1;
-        }
-
-        if ($partner_id) {
-            $params['partner_id'] = $partner_id;
-        }
-
-        $result = $this->method(static::METHOD_SMS_SEND, $params);
-        $result = explode("\n", $result);
-
-        $response = [];
-        $response['code'] = array_shift($result);
-        $response['description'] = $this->getAnswer(static::METHOD_SMS_SEND, $response['code']);
-
-        if ($response['code'] == 100) {
-            foreach ($result as $id) {
-                if (!preg_match('/=/', $id)) {
-                    $response['ids'][] = $id;
+        if ($result['code'] == 100) {
+            foreach ($result['data'] as $item) {
+                if (strpos($item, '=') === false) {
+                    $result['ids'][] = $item;
                 } else {
-                    $result = explode('=', $id);
-                    $response[$result[0]] = $result[1];
+                    $response = explode('=', $item);
+                    $result[$response[0]] = $response[1];
                 }
             }
         }
-        return $response;
+
+        return $result;
     }
 
-    public function smsMail($to, $text, $from = null)
+    /**
+     * Returns message delivery status
+     *
+     * @param string $id
+     * @return array
+     * @throws \Exception
+     *
+     * @links http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=sms/status
+     */
+    public function status($id)
     {
-        $mail = $this->apiId . '@' . static::API_HOST;
-        $subject = $from
-            ? $to . ' from:' . $from
-            : $to;
-        $headers = 'Content-Type: text/html; charset=UTF-8';
-        return mail($mail, $subject, $text, $headers);
+        return $this->callInternal(static::METHOD_SMS_STATUS, compact('id'));
     }
 
-    public function smsStatus($id)
+    /**
+     * Returns message cost
+     *
+     * @param string $to
+     * @param string $text
+     * @return array
+     * @throws \Exception
+     *
+     * @link http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=sms/cost
+     */
+    public function cost($to, $text)
     {
-        $params['id'] = $id;
-        $result = $this->method(static::METHOD_SMS_STATUS, $params);
-
-        $response = [];
-        $response['code'] = $result;
-        $response['description'] = $this->getAnswer(static::METHOD_SMS_STATUS, $response['code']);
-        return $response;
+        $result = $this->callInternal(static::METHOD_SMS_COST, compact('to', 'text'));
+        $result['cost'] = $result['data'][0];
+        $result['number'] = $result['data'][1];
+        return $result;
     }
 
-    public function smsCost($to, $text)
+    /**
+     * Returns user's balance
+     *
+     * @return array
+     * @throws \Exception
+     *
+     * @link http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=my/balance
+     */
+    public function balance()
     {
-        $params['to'] = $to;
-        $params['text'] = $text;
-
-        $result = $this->method(static::METHOD_SMS_COST, $params);
-        $result = explode("\n", $result);
-
-        return [
-            'code' => $result[0],
-            'description' => $this->getAnswer(static::METHOD_SMS_COST, $result[0]),
-            'price' => $result[1],
-            'number' => $result[2]
-        ];
+        $result = $this->callInternal(static::METHOD_MY_BALANCE);
+        $result['balance'] = $result['data'][0];
+        return $result;
     }
 
-    public function myBalance()
+    /**
+     * Returns information about the daily limit
+     *
+     * @return array
+     *
+     * @link http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=my/limit
+     */
+    public function limit()
     {
-        $result = $this->method(static::METHOD_MY_BALANCE);
-        $result = explode("\n", $result);
-        return [
-            'code' => $result[0],
-            'description' => $this->getAnswer(static::METHOD_MY_BALANCE, $result[0]),
-            'balance' => $result[1]
-        ];
+        $result = $this->callInternal(static::METHOD_MY_LIMIT);
+        $result['total'] = $result['data'][0];
+        $result['current'] = $result['data'][1];
+        return $result;
     }
 
-    public function myLimit()
+    /**
+     * Returns senders list
+     *
+     * @return array
+     *
+     * @see http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=my/senders
+     */
+    public function senders()
     {
-        $result = $this->method(static::METHOD_MY_LIMIT);
-        $result = explode("\n", $result);
-        return [
-            'code' => $result[0],
-            'description' => $this->getAnswer(static::METHOD_MY_LIMIT, $result[0]),
-            'total' => $result[1],
-            'current' => $result[2]
-        ];
+        $result = $this->callInternal(static::METHOD_MY_SENDERS);
+        $result['senders'] = array_values($result['data'][0]);
+        return $result;
     }
 
-    public function mySenders()
+    /**
+     * Adds phone to the stop list
+     *
+     * @param $phone
+     * @param $text
+     * @return array
+     *
+     * @see http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=stoplist/add
+     */
+    public function stopListAdd($phone, $text)
     {
-        $result = $this->method(static::METHOD_MY_SENDERS);
-        $result = explode("\n", rtrim($result));
-
-        $response = [
-            'code' => $result[0],
-            'description' => $this->getAnswer(static::METHOD_MY_SENDERS, $result[0]),
-            'senders' => $result
-        ];
-        unset($response['senders'][0]);
-        $response['senders'] = array_values($response['my_senders']);
-        return $response;
+        return $this->callInternal(static::METHOD_STOP_LIST_ADD, [
+            'stoplist_phone' => $phone, 'stoplist_text' => $text
+        ]);
     }
 
-    public function authGetToken()
+    /**
+     * Removes phone from the stop list
+     *
+     * @param string $phone
+     * @return array
+     *
+     * @see http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=stoplist/del
+     */
+    public function stopListDel($phone)
     {
-        return (string)$this->request('http://' . static::API_HOST . '/' . static::METHOD_AUTH_GET_TOKEN);
+        return $this->callInternal(static::METHOD_STOP_LIST_DEL, ['stoplist_phone' => $phone]);
     }
 
-    public function authCheck()
+    /**
+     * Returns stop list
+     *
+     * @return array
+     *
+     * @see http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=stoplist/get
+     */
+    public function stopListGet()
     {
-        $result = $this->method(static::METHOD_AUTH_CHECK);
-        $response = [];
-        $response['code'] = $result;
-        $response['description'] = $this->getAnswer(static::METHOD_AUTH_CHECK, $response['code']);
-        return $response;
-    }
-
-    public function stoplistAdd($stoplistPhone, $stoplistText)
-    {
-        $params['stoplist_phone'] = $stoplistPhone;
-        $params['stoplist_text'] = $stoplistText;
-        $result = $this->method(static::METHOD_STOPLIST_ADD, $params);
-
-        $response = [];
-        $response['code'] = $result;
-        $response['description'] = $this->getAnswer(static::METHOD_STOPLIST_ADD, $response['code']);
-        return $response;
-    }
-
-    public function stoplistDel($stoplistPhone)
-    {
-        $params['stoplist_phone'] = $stoplistPhone;
-        $result = $this->method(static::METHOD_STOPLIST_DEL, $params);
-
-        $response = [];
-        $response['code'] = $result;
-        $response['description'] = $this->getAnswer(static::METHOD_STOPLIST_DEL, $response['code']);
-        return $response;
-    }
-
-    public function stoplistGet()
-    {
-        $result = $this->method(static::METHOD_STOPLIST_GET);
-
-        $result = explode("\n", rtrim($result));
-        $response = [
-            'code' => $result[0],
-            'description' => $this->getAnswer(static::METHOD_STOPLIST_GET, $result[0]),
-            'stoplist' => $result
-        ];
-        $count = count($response['stoplist']);
-        $stoplist = [];
-        for ($i = 1; $i < $count; $i++) {
-            $result = explode(';', $response['stoplist'][$i]);
-            $stoplist[$i - 1]['number'] = $result[0];
-            $stoplist[$i - 1]['note'] = $result[1];
+        $result = $this->callInternal(static::METHOD_STOP_LIST_GET);
+        $list = [];
+        foreach ($result['data'] as $item) {
+            $t = explode(';', $item);
+            $list[] = [
+                'phone' => $t[0],
+                'text' => $t[1],
+            ];
         }
-        $response['stoplist'] = $stoplist;
-        return $response;
+        $result['list'] = $list;
+        return $result;
     }
 
-    private function getAuthParams()
-    {
-        if ($this->login && $this->password) {
-            $this->token = $this->authGetToken();
-            $this->sha512 = $this->getSha512();
-
-            $params['login'] = $this->login;
-            $params['token'] = $this->token;
-            $params['sha512'] = $this->sha512;
-        } elseif ($this->apiId) {
-            $params['api_id'] = $this->apiId;
-        } else {
-            throw new Exception('You should set login/password or api_id');
-        }
-        return $params;
-    }
-
-    private function getSha512()
-    {
-        return $this->apiId
-            ? hash('sha512', $this->password . $this->token . $this->apiId)
-            : hash('sha512', $this->password . $this->token);
-    }
-
-    private function getAnswer($key, $code)
+    /**
+     * Converts result code into the text
+     *
+     * @param $method
+     * @param $code
+     * @return null
+     */
+    protected function getResponseText($method, $code)
     {
         $responseCode = [
             static::METHOD_SMS_SEND => [
@@ -360,45 +380,20 @@ class Smsru
                 '301' => 'Неправильный пароль, либо пользователь не найден.',
                 '302' => 'Пользователь авторизован, но аккаунт не подтвержден (пользователь не ввел код, присланный в регистрационной смс).'
             ],
-            static::METHOD_AUTH_CHECK => [
-                '100' => 'ОК, номер телефона и пароль совпадают.',
-                '300' => 'Неправильный token (возможно истек срок действия, либо ваш IP изменился).',
-                '301' => 'Неправильный пароль, либо пользователь не найден.',
-                '302' => 'Пользователь авторизован, но аккаунт не подтвержден (пользователь не ввел код, присланный в регистрационной смс).'
-            ],
-            static::METHOD_STOPLIST_ADD => [
+            static::METHOD_STOP_LIST_ADD => [
                 '100' => 'Номер добавлен в стоплист.',
                 '202' => 'Номер телефона в неправильном формате.'
             ],
-            static::METHOD_STOPLIST_DEL => [
+            static::METHOD_STOP_LIST_DEL => [
                 '100' => 'Номер удален из стоплиста.',
                 '202' => 'Номер телефона в неправильном формате.'
             ],
-            static::METHOD_STOPLIST_GET => [
+            static::METHOD_STOP_LIST_GET => [
                 '100' => 'Запрос обработан. На последующих строчках будут идти номера телефонов, указанных в стоплисте в формате номер;примечание.'
             ]
         ];
-        return isset($responseCode[$key][$code])
-            ? $responseCode[$key][$code]
+        return isset($responseCode[$method][$code])
+            ? $responseCode[$method][$code]
             : null;
-    }
-
-    public function method($name, $params = [])
-    {
-        return (string)$this->request('http://' . static::API_HOST . '/' . $name, array_merge($params, $this->getAuthParams()));
-    }
-
-    private function request($url, $params = [])
-    {
-        if (!$this->client) {
-            $this->client = new Client();
-        }
-        /** @var Response $response */
-        $response = $this->client->post($url, ['body' => $params]);
-        if ($response->getStatusCode() == 200) {
-            return $response->getBody();
-        } else {
-            throw new Exception('Sms.ru problem. Status code is ' . $response->getStatusCode(), $response->getStatusCode());
-        }
     }
 }
