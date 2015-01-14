@@ -69,6 +69,10 @@ Removing number from the stop list
 Obtaining the stop list:
 
     $api->stopListGet();
+    
+## Licence ##
+    
+MIT
 
 ## Links
 
