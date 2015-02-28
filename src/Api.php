@@ -211,6 +211,8 @@ class Api
     public function balance()
     {
         $result = $this->callInternal(static::METHOD_MY_BALANCE);
+        if ($result['code'] != 100)
+            return $result;
         $result['balance'] = $result['data'][0];
         return $result;
     }
@@ -225,6 +227,8 @@ class Api
     public function limit()
     {
         $result = $this->callInternal(static::METHOD_MY_LIMIT);
+        if ($result['code'] != 100)
+            return $result;
         $result['total'] = $result['data'][0];
         $result['current'] = $result['data'][1];
         return $result;
@@ -240,6 +244,8 @@ class Api
     public function senders()
     {
         $result = $this->callInternal(static::METHOD_MY_SENDERS);
+        if ($result['code'] != 100)
+            return $result;
         $result['senders'] = array_values($result['data'][0]);
         return $result;
     }
