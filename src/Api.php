@@ -193,6 +193,8 @@ class Api
     public function cost($to, $text)
     {
         $result = $this->callInternal(static::METHOD_SMS_COST, compact('to', 'text'));
+        if ($result['code'] != 100)
+            return $result;
         $result['cost'] = $result['data'][0];
         $result['number'] = $result['data'][1];
         return $result;
