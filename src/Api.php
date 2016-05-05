@@ -8,17 +8,11 @@ use GuzzleHttp\Client;
  *
  * @package yiidreateam\smsru
  * @author Alexey Samoylov <alexey.samoylov@gmail.com>
+ * @author Valentin Konusov <rlng-krsk@yandex.ru>
  */
 class Api
 {
-    protected $apiId;
-
-    /** @var Client */
-    protected $client = null;
-    protected $authParams = [];
-
     const API_URL = 'http://sms.ru/';
-
     const METHOD_SMS_SEND = 'sms/send';
     const METHOD_SMS_STATUS = 'sms/status';
     const METHOD_SMS_COST = 'sms/cost';
@@ -29,62 +23,14 @@ class Api
     const METHOD_STOP_LIST_ADD = 'stoplist/add';
     const METHOD_STOP_LIST_DEL = 'stoplist/del';
     const METHOD_STOP_LIST_GET = 'stoplist/get';
+    protected $apiId;
+    /** @var Client */
+    protected $client = null;
+    protected $authParams = [];
 
     public function __construct($apiId)
     {
         $this->apiId = $apiId;
-    }
-
-    /**
-     * Makes api call
-     *
-     * @param $method
-     * @param array $params
-     * @return string
-     * @throws \Exception
-     */
-    public function call($method, $params = [])
-    {
-        if (empty($this->client))
-            $this->client = new Client([
-                'base_url' => static::API_URL,
-            ]);
-
-        if (empty($this->authParams))
-            $this->authParams = [
-                'api_id' => $this->apiId
-            ];
-
-        $params = array_merge($params, $this->authParams);
-
-        try {
-            $response = $this->client->post($method, ['body' => $params]);
-            if ($response->getStatusCode() != 200)
-                throw new \Exception('Api http error: ' . $response->getStatusCode(), $response->getStatusCode());
-            return (string)$response->getBody();
-        } catch (\Exception $e) {
-            throw $e;
-        }
-    }
-
-    /**
-     * Makes api call and returns call result as array
-     *
-     * @param string $method
-     * @param array $params
-     * @return array
-     * @throws \Exception
-     */
-    protected function callInternal($method, $params = [])
-    {
-        $response = $this->call($method, $params);
-        $response = explode("\n", rtrim($response));
-        $code = array_shift($response);
-        return [
-            'code' => $code,
-            'description' => $this->getResponseText(static::METHOD_SMS_SEND, $code),
-            'data' => $response,
-        ];
     }
 
     /**
@@ -109,8 +55,7 @@ class Api
         $transliteration = false,
         $test = false,
         $partnerId = null
-    )
-    {
+    ) {
         $messages = [[$to, $text]];
         return $this->sendMultiple($messages, $from, $time, $transliteration, $test, $partnerId);
     }
@@ -136,8 +81,7 @@ class Api
         $transliteration = false,
         $test = false,
         $partnerId = null
-    )
-    {
+    ) {
         $params = [
             'from' => $from,
             'time' => $time,
@@ -147,8 +91,9 @@ class Api
         ];
         array_filter($params);
 
-        foreach ($messages as $message)
+        foreach ($messages as $message) {
             $params['multi'][$message[0]] = $message[1];
+        }
 
         $result = $this->callInternal(static::METHOD_SMS_SEND, $params);
 
@@ -167,138 +112,58 @@ class Api
     }
 
     /**
-     * Returns message delivery status
+     * Makes api call and returns call result as array
      *
-     * @param string $id
+     * @param string $method
+     * @param array $params
      * @return array
      * @throws \Exception
-     *
-     * @links http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=sms/status
      */
-    public function status($id)
+    protected function callInternal($method, $params = [])
     {
-        return $this->callInternal(static::METHOD_SMS_STATUS, compact('id'));
+        $response = $this->call($method, $params);
+        $response = explode("\n", rtrim($response));
+        $code = array_shift($response);
+        return [
+            'code' => $code,
+            'description' => $this->getResponseText(static::METHOD_SMS_SEND, $code),
+            'data' => $response,
+        ];
     }
 
     /**
-     * Returns message cost
+     * Makes api call
      *
-     * @param string $to
-     * @param string $text
-     * @return array
+     * @param $method
+     * @param array $params
+     * @return string
      * @throws \Exception
-     *
-     * @link http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=sms/cost
      */
-    public function cost($to, $text)
+    public function call($method, $params = [])
     {
-        $result = $this->callInternal(static::METHOD_SMS_COST, compact('to', 'text'));
-        if ($result['code'] != 100)
-            return $result;
-        $result['cost'] = $result['data'][0];
-        $result['number'] = $result['data'][1];
-        return $result;
-    }
+        if (empty($this->client)) {
+            $this->client = new Client([
+                'base_uri' => static::API_URL,
+            ]);
+        }
 
-    /**
-     * Returns user's balance
-     *
-     * @return array
-     * @throws \Exception
-     *
-     * @link http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=my/balance
-     */
-    public function balance()
-    {
-        $result = $this->callInternal(static::METHOD_MY_BALANCE);
-        if ($result['code'] != 100)
-            return $result;
-        $result['balance'] = $result['data'][0];
-        return $result;
-    }
-
-    /**
-     * Returns information about the daily limit
-     *
-     * @return array
-     *
-     * @link http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=my/limit
-     */
-    public function limit()
-    {
-        $result = $this->callInternal(static::METHOD_MY_LIMIT);
-        if ($result['code'] != 100)
-            return $result;
-        $result['total'] = $result['data'][0];
-        $result['current'] = $result['data'][1];
-        return $result;
-    }
-
-    /**
-     * Returns senders list
-     *
-     * @return array
-     *
-     * @see http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=my/senders
-     */
-    public function senders()
-    {
-        $result = $this->callInternal(static::METHOD_MY_SENDERS);
-        if ($result['code'] != 100)
-            return $result;
-        $result['senders'] = array_values($result['data'][0]);
-        return $result;
-    }
-
-    /**
-     * Adds phone to the stop list
-     *
-     * @param $phone
-     * @param $text
-     * @return array
-     *
-     * @see http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=stoplist/add
-     */
-    public function stopListAdd($phone, $text)
-    {
-        return $this->callInternal(static::METHOD_STOP_LIST_ADD, [
-            'stoplist_phone' => $phone, 'stoplist_text' => $text
-        ]);
-    }
-
-    /**
-     * Removes phone from the stop list
-     *
-     * @param string $phone
-     * @return array
-     *
-     * @see http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=stoplist/del
-     */
-    public function stopListDel($phone)
-    {
-        return $this->callInternal(static::METHOD_STOP_LIST_DEL, ['stoplist_phone' => $phone]);
-    }
-
-    /**
-     * Returns stop list
-     *
-     * @return array
-     *
-     * @see http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=stoplist/get
-     */
-    public function stopListGet()
-    {
-        $result = $this->callInternal(static::METHOD_STOP_LIST_GET);
-        $list = [];
-        foreach ($result['data'] as $item) {
-            $t = explode(';', $item);
-            $list[] = [
-                'phone' => $t[0],
-                'text' => $t[1],
+        if (empty($this->authParams)) {
+            $this->authParams = [
+                'api_id' => $this->apiId
             ];
         }
-        $result['list'] = $list;
-        return $result;
+
+        $params = array_merge($params, $this->authParams);
+
+        try {
+            $response = $this->client->post($method, ['form_params' => $params]);
+            if ($response->getStatusCode() != 200) {
+                throw new \Exception('Api http error: ' . $response->getStatusCode(), $response->getStatusCode());
+            }
+            return (string)$response->getBody();
+        } catch (\Exception $e) {
+            throw $e;
+        }
     }
 
     /**
@@ -408,5 +273,145 @@ class Api
         return isset($responseCode[$method][$code])
             ? $responseCode[$method][$code]
             : null;
+    }
+
+    /**
+     * Returns message delivery status
+     *
+     * @param string $id
+     * @return array
+     * @throws \Exception
+     *
+     * @links http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=sms/status
+     */
+    public function status($id)
+    {
+        return $this->callInternal(static::METHOD_SMS_STATUS, compact('id'));
+    }
+
+    /**
+     * Returns message cost
+     *
+     * @param string $to
+     * @param string $text
+     * @return array
+     * @throws \Exception
+     *
+     * @link http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=sms/cost
+     */
+    public function cost($to, $text)
+    {
+        $result = $this->callInternal(static::METHOD_SMS_COST, compact('to', 'text'));
+        if ($result['code'] != 100) {
+            return $result;
+        }
+        $result['cost'] = $result['data'][0];
+        $result['number'] = $result['data'][1];
+        return $result;
+    }
+
+    /**
+     * Returns user's balance
+     *
+     * @return array
+     * @throws \Exception
+     *
+     * @link http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=my/balance
+     */
+    public function balance()
+    {
+        $result = $this->callInternal(static::METHOD_MY_BALANCE);
+        if ($result['code'] != 100) {
+            return $result;
+        }
+        $result['balance'] = $result['data'][0];
+        return $result;
+    }
+
+    /**
+     * Returns information about the daily limit
+     *
+     * @return array
+     *
+     * @link http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=my/limit
+     */
+    public function limit()
+    {
+        $result = $this->callInternal(static::METHOD_MY_LIMIT);
+        if ($result['code'] != 100) {
+            return $result;
+        }
+        $result['total'] = $result['data'][0];
+        $result['current'] = $result['data'][1];
+        return $result;
+    }
+
+    /**
+     * Returns senders list
+     *
+     * @return array
+     *
+     * @see http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=my/senders
+     */
+    public function senders()
+    {
+        $result = $this->callInternal(static::METHOD_MY_SENDERS);
+        if ($result['code'] != 100) {
+            return $result;
+        }
+        $result['senders'] = array_values($result['data'][0]);
+        return $result;
+    }
+
+    /**
+     * Adds phone to the stop list
+     *
+     * @param $phone
+     * @param $text
+     * @return array
+     *
+     * @see http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=stoplist/add
+     */
+    public function stopListAdd($phone, $text)
+    {
+        return $this->callInternal(static::METHOD_STOP_LIST_ADD, [
+            'stoplist_phone' => $phone,
+            'stoplist_text' => $text
+        ]);
+    }
+
+    /**
+     * Removes phone from the stop list
+     *
+     * @param string $phone
+     * @return array
+     *
+     * @see http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=stoplist/del
+     */
+    public function stopListDel($phone)
+    {
+        return $this->callInternal(static::METHOD_STOP_LIST_DEL, ['stoplist_phone' => $phone]);
+    }
+
+    /**
+     * Returns stop list
+     *
+     * @return array
+     *
+     * @see http://yiidreamteam.sms.ru/?panel=api&subpanel=method&show=stoplist/get
+     */
+    public function stopListGet()
+    {
+        $result = $this->callInternal(static::METHOD_STOP_LIST_GET);
+        $list = [];
+        foreach ($result['data'] as $item) {
+            $t = explode(';', $item);
+            $list[] = [
+                'phone' => $t[0],
+                'text' => $t[1],
+            ];
+        }
+        $result['list'] = $list;
+        return $result;
     }
 }

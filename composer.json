@@ -15,7 +15,14 @@
       "email": "alexey.samoylov@gmail.com",
       "homepage": "http://yiidreamteam.com/team/alexey",
       "role": "Developer"
+    },
+    {
+      "name": "Valentin Konusov",
+      "email": "rlng-krsk@yandex.ru",
+      "homepage": "http://yiidreamteam.com/team/valentin",
+      "role": "Maintainer"
     }
+
   ],
   "support": {
     "issues": "https://github.com/yii-dream-team/smsru/issues",
@@ -23,7 +30,7 @@
   },
   "require": {
     "php": ">=5.4.0",
-    "guzzlehttp/guzzle": "~5.3"
+    "guzzlehttp/guzzle": "^6.0"
   },
   "autoload": {
     "psr-4": {
